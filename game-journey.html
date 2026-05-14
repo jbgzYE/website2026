@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game Journey</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #f8f6ed;
+      --ink: #151515;
+      --muted: #6c6a62;
+      --line: rgba(21, 21, 21, 0.14);
+      --accent: #ff6a3d;
+      --blue: #2478ff;
+      --green: #1a9c72;
+      --violet: #8f4dff;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(36, 120, 255, 0.12), transparent 28%),
+        radial-gradient(circle at 78% 22%, rgba(255, 106, 61, 0.13), transparent 30%),
+        linear-gradient(90deg, rgba(21, 21, 21, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(21, 21, 21, 0.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, auto, 44px 44px, 44px 44px, auto;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    .app.is-dragging {
+      cursor: grabbing;
+    }
+
+    .topbar {
+      position: fixed;
+      z-index: 30;
+      top: 22px;
+      left: 26px;
+      right: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      pointer-events: none;
+    }
+
+    .title {
+      pointer-events: auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 58px);
+      line-height: 0.9;
+      letter-spacing: 0;
+      font-weight: 850;
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 680;
+      text-transform: uppercase;
+    }
+
+    .meta::before {
+      content: "";
+      width: 44px;
+      height: 2px;
+      background: var(--ink);
+    }
+
+    .controls {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      background: rgba(248, 246, 237, 0.78);
+      backdrop-filter: blur(14px);
+    }
+
+    input,
+    button {
+      height: 36px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.52);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+    }
+
+    input {
+      width: min(270px, 36vw);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--ink);
+    }
+
+    button {
+      min-width: 38px;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--bg);
+    }
+
+    .viewport {
+      position: absolute;
+      inset: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .map {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 2600px;
+      height: 1680px;
+      transform: translate(-50%, -50%);
+    }
+
+    .axis {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    .axis::before,
+    .axis::after {
+      content: "";
+      position: absolute;
+      background: rgba(21, 21, 21, 0.13);
+    }
+
+    .axis::before {
+      left: 50%;
+      top: 7%;
+      width: 1px;
+      height: 86%;
+    }
+
+    .axis::after {
+      left: 6%;
+      top: 50%;
+      width: 88%;
+      height: 1px;
+    }
+
+    .label {
+      --x: 0px;
+      --y: 0px;
+      --size: 16px;
+      --hue: 0;
+      --float: 12s;
+      --delay: 0s;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      translate: var(--x) var(--y);
+      transform: translate(-50%, -50%);
+      color: hsl(var(--hue), 76%, 35%);
+      font-size: var(--size);
+      line-height: 1;
+      font-weight: 720;
+      letter-spacing: 0;
+      white-space: nowrap;
+      text-decoration: none;
+      text-shadow: 0 1px 0 rgba(248, 246, 237, 0.9);
+      user-select: none;
+      animation: drift var(--float) ease-in-out var(--delay) infinite alternate;
+      transition: opacity 180ms ease, filter 180ms ease, color 180ms ease, transform 180ms ease;
+    }
+
+    .label::before {
+      content: "";
+      position: absolute;
+      left: -9px;
+      top: 50%;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      transform: translateY(-50%);
+      opacity: 0.62;
+    }
+
+    .label:hover,
+    .label.is-focus {
+      z-index: 10;
+      color: var(--ink);
+      filter: drop-shadow(0 10px 18px rgba(21, 21, 21, 0.18));
+      transform: translate(-50%, -50%) scale(1.34);
+    }
+
+    .label.is-hidden {
+      opacity: 0.12;
+      filter: grayscale(1);
+    }
+
+    .label.is-match {
+      color: var(--accent);
+      z-index: 12;
+    }
+
+    @keyframes drift {
+      from {
+        margin-left: -8px;
+        margin-top: -7px;
+      }
+      to {
+        margin-left: 9px;
+        margin-top: 8px;
+      }
+    }
+
+    .hint {
+      position: fixed;
+      z-index: 30;
+      left: 26px;
+      bottom: 22px;
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: none;
+    }
+
+    .counter {
+      position: fixed;
+      z-index: 30;
+      right: 26px;
+      bottom: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+      pointer-events: none;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .controls {
+        width: 100%;
+      }
+
+      input {
+        width: 100%;
+        flex: 1;
+      }
+
+      .map {
+        width: 1900px;
+        height: 1320px;
+      }
+
+      .hint {
+        left: 14px;
+        right: 14px;
+        bottom: 16px;
+      }
+
+      .counter {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="topbar">
+      <div class="title">
+        <h1>Game Journey</h1>
+        <div class="meta"><span id="visibleCount">54 names</span></div>
+      </div>
+      <div class="controls" aria-label="Map controls">
+        <input id="search" type="search" placeholder="Search games" aria-label="Search games" />
+        <button id="shuffle" type="button" title="Scatter again" aria-label="Scatter again">↻</button>
+        <button id="reset" type="button" title="Reset view" aria-label="Reset view">⌂</button>
+      </div>
+    </header>
+
+    <section class="viewport" id="viewport" aria-label="Floating game-name map">
+      <div class="map" id="map">
+        <div class="axis" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <div class="hint">Drag to pan. Scroll or pinch to zoom. The map uses only the English game-name column from your data.</div>
+    <div class="counter" id="zoomReadout">100%</div>
+  </main>
+
+  <script>
+    const games = [
+      "Borderlands 4",
+      "Borderlands 2",
+      "Grand Theft Auto V",
+      "EA SPORTS FC™ 25",
+      "Cyberpunk 2077",
+      "Borderlands 3",
+      "Terraria",
+      "EA SPORTS FC™ 24",
+      "HITMAN 2",
+      "ELDEN RING",
+      "Overwatch 2",
+      "Grand Theft Auto V Enhanced",
+      "Red Dead Redemption 2",
+      "Black Myth: Wukong",
+      "Borderlands: The Pre-Sequel",
+      "Far Cry 5",
+      "Slay the Spire 2",
+      "Fall Guys",
+      "Hogwarts Legacy",
+      "Split Fiction",
+      "Star Wars Jedi: Fallen Order",
+      "Sid Meier's Civilization VI",
+      "Sunset Overdrive",
+      "Sea of Thieves",
+      "Tabletop Simulator",
+      "Human: Fall Flat",
+      "A Way Out",
+      "It Takes Two",
+      "The Darkside Detective",
+      "Tales from the Borderlands",
+      "Baba Is You",
+      "Detroit: Become Human",
+      "Garry's Mod",
+      "Battlefield V",
+      "Far Cry 3",
+      "Enter the Gungeon",
+      "Left 4 Dead 2",
+      "Portal 2",
+      "Into the Breach",
+      "Risk of Rain 2",
+      "PAYDAY 2",
+      "Getting Over It with Bennett Foddy",
+      "Streets of Rogue",
+      "Goose Goose Duck",
+      "Sifu",
+      "Sherlock Holmes: The Awakened",
+      "Counter-Strike 2",
+      "Cuphead",
+      "INSIDE",
+      "Need for Speed Unbound",
+      "For The King",
+      "Dying Light 2 Stay Human",
+      "Broforce",
+      "Assassin's Creed Origins"
+    ];
+
+    const app = document.getElementById("app");
+    const viewport = document.getElementById("viewport");
+    const map = document.getElementById("map");
+    const search = document.getElementById("search");
+    const shuffle = document.getElementById("shuffle");
+    const reset = document.getElementById("reset");
+    const visibleCount = document.getElementById("visibleCount");
+    const zoomReadout = document.getElementById("zoomReadout");
+
+    let seedSalt = 17;
+    let scale = 1;
+    let panX = 0;
+    let panY = 0;
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragPanX = 0;
+    let dragPanY = 0;
+
+    function hash(text) {
+      let h = 2166136261 + seedSalt;
+      for (let i = 0; i < text.length; i += 1) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function randomUnit(text, offset) {
+      const value = hash(`${text}:${offset}`);
+      return value / 4294967295;
+    }
+
+    function scatter() {
+      map.querySelectorAll(".label").forEach((node) => node.remove());
+      games.forEach((name, index) => {
+        const angle = randomUnit(name, "angle") * Math.PI * 2;
+        const ring = Math.sqrt(randomUnit(name, "ring"));
+        const wobble = (randomUnit(name, "wobble") - 0.5) * 180;
+        const x = Math.cos(angle) * ring * 1060 + wobble;
+        const y = Math.sin(angle) * ring * 650 + (randomUnit(name, "height") - 0.5) * 120;
+        const size = 13 + randomUnit(name, "size") * 18;
+        const hue = Math.round(8 + randomUnit(name, "hue") * 222);
+        const float = 8 + randomUnit(name, "float") * 9;
+        const delay = -randomUnit(name, "delay") * 10;
+
+        const label = document.createElement("a");
+        label.className = "label";
+        label.href = "#";
+        label.textContent = name;
+        label.dataset.name = name.toLowerCase();
+        label.style.setProperty("--x", `${x.toFixed(1)}px`);
+        label.style.setProperty("--y", `${y.toFixed(1)}px`);
+        label.style.setProperty("--size", `${size.toFixed(1)}px`);
+        label.style.setProperty("--hue", hue);
+        label.style.setProperty("--float", `${float.toFixed(1)}s`);
+        label.style.setProperty("--delay", `${delay.toFixed(1)}s`);
+        label.addEventListener("click", (event) => {
+          event.preventDefault();
+          search.value = name;
+          filter();
+          label.classList.add("is-focus");
+          setTimeout(() => label.classList.remove("is-focus"), 950);
+        });
+        map.appendChild(label);
+      });
+      filter();
+    }
+
+    function applyTransform() {
+      viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      zoomReadout.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    function centerView() {
+      panX = window.innerWidth / 2;
+      panY = window.innerHeight / 2;
+      scale = window.innerWidth < 760 ? 0.52 : 0.78;
+      applyTransform();
+    }
+
+    function filter() {
+      const query = search.value.trim().toLowerCase();
+      let matches = 0;
+      document.querySelectorAll(".label").forEach((label) => {
+        const match = !query || label.dataset.name.includes(query);
+        label.classList.toggle("is-hidden", !match);
+        label.classList.toggle("is-match", Boolean(query && match));
+        if (match) matches += 1;
+      });
+      visibleCount.textContent = `${matches} names`;
+    }
+
+    app.addEventListener("pointerdown", (event) => {
+      if (event.target.closest(".controls")) return;
+      dragging = true;
+      app.classList.add("is-dragging");
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+      dragPanX = panX;
+      dragPanY = panY;
+      app.setPointerCapture(event.pointerId);
+    });
+
+    app.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      panX = dragPanX + event.clientX - dragStartX;
+      panY = dragPanY + event.clientY - dragStartY;
+      applyTransform();
+    });
+
+    app.addEventListener("pointerup", (event) => {
+      dragging = false;
+      app.classList.remove("is-dragging");
+      app.releasePointerCapture(event.pointerId);
+    });
+
+    app.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const previousScale = scale;
+      const delta = event.deltaY > 0 ? 0.92 : 1.08;
+      scale = Math.min(2.4, Math.max(0.32, scale * delta));
+      const worldX = (event.clientX - panX) / previousScale;
+      const worldY = (event.clientY - panY) / previousScale;
+      panX = event.clientX - worldX * scale;
+      panY = event.clientY - worldY * scale;
+      applyTransform();
+    }, { passive: false });
+
+    search.addEventListener("input", filter);
+    shuffle.addEventListener("click", () => {
+      seedSalt += 137;
+      scatter();
+    });
+    reset.addEventListener("click", centerView);
+    window.addEventListener("resize", centerView);
+
+    scatter();
+    centerView();
+  </script>
+</body>
+</html>
