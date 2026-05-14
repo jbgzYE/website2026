@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Infinite Map</title>
+  <style>
+    :root {
+      --paper: #f7f5f5;
+      --paper-2: #eeecec;
+      --line: #d8d7d7;
+      --line-soft: #e5e3e3;
+      --water: #aee0fb;
+      --water-deep: #94d4f4;
+      --pink: #ff607f;
+      --ink: #23131d;
+      --shadow: rgba(62, 50, 57, .16);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--paper);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: none;
+      user-select: none;
+    }
+
+    body {
+      min-height: 100dvh;
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 45%),
+        linear-gradient(180deg, #f9f8f8 0%, #f1efef 100%);
+    }
+
+    .map {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    .map.is-dragging {
+      cursor: grabbing;
+    }
+
+    .chunk-bg {
+      fill: var(--paper);
+    }
+
+    .water {
+      fill: var(--water);
+    }
+
+    .water-edge {
+      fill: none;
+      stroke: rgba(115, 178, 212, .28);
+      stroke-width: 4;
+    }
+
+    .road {
+      fill: none;
+      stroke: rgba(255, 255, 255, .92);
+      stroke-width: 34;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .road-line {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .path-block {
+      fill: none;
+      stroke: #bebcbc;
+      stroke-width: 14;
+      stroke-linecap: butt;
+      stroke-dasharray: 18 22;
+      opacity: .8;
+    }
+
+    .building {
+      fill: rgba(245, 243, 243, .82);
+      stroke: var(--line-soft);
+      stroke-width: 3;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .building.inner {
+      fill: none;
+      stroke: rgba(212, 210, 210, .72);
+      stroke-width: 2;
+    }
+
+    .minor-line {
+      fill: none;
+      stroke: rgba(198, 197, 197, .45);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .no-entry .halo {
+      fill: rgba(255, 96, 127, .2);
+      filter: drop-shadow(0 2px 3px rgba(105, 80, 89, .18));
+    }
+
+    .no-entry .core {
+      fill: var(--pink);
+      stroke: rgba(255, 255, 255, .65);
+      stroke-width: 3;
+    }
+
+    .no-entry .bar {
+      stroke: white;
+      stroke-width: 8;
+      stroke-linecap: round;
+    }
+
+    .no-entry.bump .halo {
+      animation: bump .42s ease;
+    }
+
+    .poi {
+      cursor: pointer;
+    }
+
+    .poi .ring {
+      fill: rgba(255, 255, 255, .88);
+      stroke: rgba(189, 187, 187, .58);
+      stroke-width: 3;
+      filter: drop-shadow(0 2px 3px rgba(73, 60, 66, .18));
+    }
+
+    .poi .mark {
+      fill: #6f6970;
+    }
+
+    .poi:hover .ring,
+    .poi.is-active .ring {
+      stroke: var(--pink);
+      stroke-width: 4;
+    }
+
+    .poi.is-active .pulse {
+      fill: none;
+      stroke: var(--pink);
+      stroke-width: 4;
+      animation: pulse 1.4s ease-out infinite;
+    }
+
+    .player {
+      pointer-events: none;
+      filter: drop-shadow(0 4px 5px rgba(41, 27, 35, .24));
+    }
+
+    .player .pin {
+      fill: white;
+      stroke: rgba(46, 36, 43, .13);
+      stroke-width: 3;
+    }
+
+    .player .arrow {
+      fill: var(--ink);
+    }
+
+    .player .wake {
+      fill: none;
+      stroke: rgba(255, 96, 127, .65);
+      stroke-width: 3;
+      animation: pulse 1.8s ease-out infinite;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .controls {
+      position: absolute;
+      right: max(18px, env(safe-area-inset-right));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display: grid;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .button {
+      width: 62px;
+      height: 62px;
+      border: 0;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 10px 28px rgba(65, 52, 59, .16);
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      cursor: pointer;
+      backdrop-filter: blur(14px);
+    }
+
+    .button svg {
+      width: 31px;
+      height: 31px;
+      display: block;
+    }
+
+    .button:active {
+      transform: translateY(1px) scale(.98);
+    }
+
+    .status {
+      position: absolute;
+      left: max(18px, env(safe-area-inset-left));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      width: 62px;
+      display: grid;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .chip {
+      width: 62px;
+      height: 62px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .9);
+      box-shadow: 0 10px 28px rgba(65, 52, 59, .13);
+      display: grid;
+      place-items: center;
+      backdrop-filter: blur(14px);
+      opacity: .96;
+      transform: translateY(0);
+    }
+
+    .chip svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: #6f6970;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .chip.active svg {
+      stroke: var(--pink);
+    }
+
+    @keyframes pulse {
+      from {
+        opacity: .8;
+        transform: scale(.72);
+      }
+
+      to {
+        opacity: 0;
+        transform: scale(1.8);
+      }
+    }
+
+    @keyframes bump {
+      0% { transform: scale(1); opacity: .85; }
+      42% { transform: scale(1.42); opacity: .42; }
+      100% { transform: scale(1); opacity: .2; }
+    }
+
+    @media (max-width: 620px) {
+      .button,
+      .chip {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+      }
+
+      .button svg,
+      .chip svg {
+        width: 28px;
+        height: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <svg class="map" data-testid="infinite-map" aria-label="map" role="img">
+      <defs>
+        <filter id="softBlur">
+          <feGaussianBlur stdDeviation="16"></feGaussianBlur>
+        </filter>
+      </defs>
+      <g id="world"></g>
+      <g id="fx"></g>
+      <g id="player" class="player">
+        <circle class="wake" r="24"></circle>
+        <rect class="pin" x="-28" y="-28" width="56" height="56" rx="17"></rect>
+        <path class="arrow" d="M 3 -18 L 19 18 L 1 10 L -15 19 Z"></path>
+      </g>
+    </svg>
+    <section class="hud" aria-hidden="true">
+      <div class="status">
+        <div class="chip active" id="modeChip">
+          <svg viewBox="0 0 32 32">
+            <path d="M16 4l9 22-9-5-9 5z"></path>
+          </svg>
+        </div>
+        <div class="chip" id="poiChip">
+          <svg viewBox="0 0 32 32">
+            <circle cx="16" cy="12" r="5"></circle>
+            <path d="M16 17v10"></path>
+            <path d="M10 27h12"></path>
+          </svg>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="button" id="zoomIn" type="button" aria-label="zoom in">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round">
+            <path d="M16 7v18M7 16h18"></path>
+          </svg>
+        </button>
+        <button class="button" id="zoomOut" type="button" aria-label="zoom out">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round">
+            <path d="M7 16h18"></path>
+          </svg>
+        </button>
+        <button class="button" id="center" type="button" aria-label="center">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 4v5M16 23v5M4 16h5M23 16h5"></path>
+            <circle cx="16" cy="16" r="6"></circle>
+          </svg>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const svg = document.querySelector(".map");
+      const world = document.querySelector("#world");
+      const fx = document.querySelector("#fx");
+      const playerEl = document.querySelector("#player");
+      const zoomIn = document.querySelector("#zoomIn");
+      const zoomOut = document.querySelector("#zoomOut");
+      const centerButton = document.querySelector("#center");
+      const poiChip = document.querySelector("#poiChip");
+
+      const NS = "http://www.w3.org/2000/svg";
+      const CHUNK = 720;
+      const SESSION_SEED = Math.floor(Math.random() * 0xffffffff);
+      const loaded = new Map();
+      let chunkGeneration = 0;
+      const COAST_BASE = 260 + Math.random() * 520;
+      const COAST_PHASE_A = Math.random() * Math.PI * 2;
+      const COAST_PHASE_B = Math.random() * Math.PI * 2;
+      const COAST_AMP_A = 105 + Math.random() * 150;
+      const COAST_AMP_B = 42 + Math.random() * 95;
+      const BAY_THRESHOLD = -1800 + Math.random() * 1050;
+      const ROAD_SPACING_X = 185 + Math.random() * 150;
+      const ROAD_SPACING_Y = 185 + Math.random() * 150;
+      const ROAD_OFFSET_X = (Math.random() - .5) * 520;
+      const ROAD_OFFSET_Y = (Math.random() - .5) * 520;
+      const ROAD_MAJOR_SHIFT_X = Math.floor(Math.random() * 4);
+      const ROAD_MAJOR_SHIFT_Y = Math.floor(Math.random() * 4);
+      const state = {
+        width: 1,
+        height: 1,
+        zoom: 1,
+        targetZoom: 1,
+        panX: 0,
+        panY: 0,
+        dragging: false,
+        dragStartX: 0,
+        dragStartY: 0,
+        panStartX: 0,
+        panStartY: 0,
+        activePoi: null,
+        player: { x: 0, y: 0 },
+        playerStart: { x: 0, y: 0 },
+        playerTarget: { x: 0, y: 0 },
+        playerT: 1,
+        lastTime: 0
+      };
+
+      const icons = [
+        "M16 7c4 0 7 3 7 7s-7 11-7 11S9 18 9 14s3-7 7-7zm0 4a3 3 0 100 6 3 3 0 000-6z",
+        "M9 23h14M11 23V11l5-4 5 4v12M14 23v-7h4v7",
+        "M8 20c4-2 6-6 8-12 2 6 4 10 8 12-4 3-12 3-16 0z",
+        "M9 22l7-15 7 15M12 17h8"
+      ];
+
+      function el(name, attrs = {}, parent) {
+        const node = document.createElementNS(NS, name);
+        Object.entries(attrs).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) node.setAttribute(key, value);
+        });
+        if (parent) parent.appendChild(node);
+        return node;
+      }
+
+      function hash32(a, b, c = 0, d = 0) {
+        let h = 2166136261;
+        h ^= SESSION_SEED + 0x27d4eb2d + (h << 6) + (h >>> 2);
+        h = Math.imul(h, 16777619);
+        h ^= a + 0x9e3779b9 + (h << 6) + (h >>> 2);
+        h = Math.imul(h, 16777619);
+        h ^= b + 0x85ebca6b + (h << 6) + (h >>> 2);
+        h = Math.imul(h, 16777619);
+        h ^= c + (h << 6) + (h >>> 2);
+        h = Math.imul(h, 16777619);
+        h ^= d + (h << 6) + (h >>> 2);
+        return h >>> 0;
+      }
+
+      function rngFor(cx, cy, salt = 0, generation = 0) {
+        let x = hash32(cx, cy, salt, generation);
+        return () => {
+          x ^= x << 13;
+          x ^= x >>> 17;
+          x ^= x << 5;
+          return (x >>> 0) / 4294967296;
+        };
+      }
+
+      function noise(x, y, salt = 0) {
+        return rngFor(Math.floor(x), Math.floor(y), salt)();
+      }
+
+      function coastX(y) {
+        return COAST_BASE
+          + Math.sin(y * 0.0021 + COAST_PHASE_A) * COAST_AMP_A
+          + Math.sin(y * 0.0063 + COAST_PHASE_B) * COAST_AMP_B
+          + Math.sin(y * 0.011 + COAST_PHASE_A * .4) * 38;
+      }
+
+      function inWater(x, y) {
+        return x > coastX(y) || (y < BAY_THRESHOLD && x > -620 + Math.sin(x * .003 + COAST_PHASE_B) * 260);
+      }
+
+      function toLocal(cx, cy, x, y) {
+        return { x: x - cx * CHUNK, y: y - cy * CHUNK };
+      }
+
+      function linePath(points) {
+        return points.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+      }
+
+      function sampleCoastInChunk(cx, cy) {
+        const minY = cy * CHUNK;
+        const maxY = minY + CHUNK;
+        const samples = [];
+        for (let y = minY - 40; y <= maxY + 40; y += 80) {
+          samples.push({ x: coastX(y), y });
+        }
+        return samples;
+      }
+
+      function localWaterBodies(cx, cy, generation) {
+        const rng = rngFor(cx, cy, 760, generation);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const bodies = [];
+        const count = 1 + Math.floor(rng() * 4);
+        for (let i = 0; i < count; i += 1) {
+          const long = rng() > .48;
+          const rx = long ? 90 + rng() * 230 : 55 + rng() * 145;
+          const ry = long ? 26 + rng() * 62 : 44 + rng() * 120;
+          const x = minX + rng() * CHUNK;
+          const y = minY + rng() * CHUNK;
+          if (inWater(x, y) && rng() < .7) continue;
+          bodies.push({
+            x,
+            y,
+            rx,
+            ry,
+            angle: rng() * Math.PI,
+            wobble: .16 + rng() * .22,
+            points: 9 + Math.floor(rng() * 5)
+          });
+        }
+        return bodies;
+      }
+
+      function localWaterPath(body) {
+        const points = [];
+        for (let i = 0; i < body.points; i += 1) {
+          const t = (Math.PI * 2 * i) / body.points;
+          const wobble = 1 + Math.sin(t * 3.1 + body.x * .004) * body.wobble + Math.cos(t * 2.4 + body.y * .003) * body.wobble * .55;
+          const px = Math.cos(t) * body.rx * wobble;
+          const py = Math.sin(t) * body.ry * wobble;
+          const cos = Math.cos(body.angle);
+          const sin = Math.sin(body.angle);
+          points.push({
+            x: body.x + px * cos - py * sin,
+            y: body.y + px * sin + py * cos
+          });
+        }
+        return `${linePath(points)} Z`;
+      }
+
+      function pointInLocalWater(x, y, bodies) {
+        return bodies.some((body) => {
+          const dx = x - body.x;
+          const dy = y - body.y;
+          const cos = Math.cos(-body.angle);
+          const sin = Math.sin(-body.angle);
+          const lx = dx * cos - dy * sin;
+          const ly = dx * sin + dy * cos;
+          return (lx * lx) / ((body.rx + 18) * (body.rx + 18)) + (ly * ly) / ((body.ry + 18) * (body.ry + 18)) < 1;
+        });
+      }
+
+      function inAnyWater(x, y, bodies) {
+        return inWater(x, y) || pointInLocalWater(x, y, bodies);
+      }
+
+      function renderWater(group, cx, cy, generation) {
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const maxX = minX + CHUNK;
+        const maxY = minY + CHUNK;
+        const coast = sampleCoastInChunk(cx, cy);
+        const intersectsEast = coast.some((p) => p.x > minX - 80 && p.x < maxX + 80);
+        const fullyWater = minX > Math.max(...coast.map((p) => p.x));
+        const topBay = minY < BAY_THRESHOLD && maxX > -720;
+        const bodies = fullyWater ? [] : localWaterBodies(cx, cy, generation);
+
+        if (fullyWater) {
+          el("rect", { class: "water", x: minX, y: minY, width: CHUNK, height: CHUNK }, group);
+          return bodies;
+        }
+
+        if (intersectsEast) {
+          const right = [
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            ...coast.slice().reverse().map((p) => ({ x: Math.max(minX, Math.min(maxX, p.x)), y: Math.max(minY, Math.min(maxY, p.y)) }))
+          ];
+          el("path", { class: "water", d: `${linePath(right)} Z` }, group);
+          el("path", { class: "water-edge", d: linePath(coast.map((p) => ({ x: p.x, y: p.y }))) }, group);
+        }
+
+        if (topBay) {
+          const y = minY + 80 + Math.sin(cx * 1.7 + COAST_PHASE_A) * 54;
+          const d = `M ${minX} ${minY} H ${maxX} V ${y + 90} C ${minX + 520} ${y + 50}, ${minX + 210} ${y + 30}, ${minX} ${y + 130} Z`;
+          el("path", { class: "water", d }, group);
+        }
+
+        bodies.forEach((body) => {
+          const d = localWaterPath(body);
+          el("path", { class: "water", d }, group);
+          el("path", { class: "water-edge", d }, group);
+        });
+
+        return bodies;
+      }
+
+      function roadLinesInChunk(cx, cy, orientation) {
+        const min = orientation === "v" ? cx * CHUNK : cy * CHUNK;
+        const max = min + CHUNK;
+        const spacing = orientation === "v" ? ROAD_SPACING_X : ROAD_SPACING_Y;
+        const offset = orientation === "v" ? ROAD_OFFSET_X : ROAD_OFFSET_Y;
+        const majorShift = orientation === "v" ? ROAD_MAJOR_SHIFT_X : ROAD_MAJOR_SHIFT_Y;
+        const lines = [];
+        const start = Math.floor((min - offset - 280) / spacing);
+        const end = Math.ceil((max - offset + 280) / spacing);
+        for (let i = start; i <= end; i += 1) {
+          const jitter = (noise(i, orientation === "v" ? 19 : 31, orientation === "v" ? 200 : 300) - .5) * Math.min(92, spacing * .34);
+          const pos = offset + i * spacing + jitter;
+          const major = Math.abs(i + majorShift) % 3 === 0;
+          if (pos > min - 70 && pos < max + 70) lines.push({ pos, major, index: i });
+        }
+        return lines;
+      }
+
+      function addLocalRoads(roads, cx, cy, generation, localWaters) {
+        const rng = rngFor(cx, cy, 530, generation);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const count = 2 + Math.floor(rng() * 5);
+        for (let i = 0; i < count; i += 1) {
+          const x = minX + 70 + rng() * (CHUNK - 140);
+          const y = minY + 70 + rng() * (CHUNK - 140);
+          if (inAnyWater(x, y, localWaters) || rng() < .18) continue;
+          const angle = rng() * Math.PI * 2;
+          const length = 220 + rng() * 560;
+          const segments = 3 + Math.floor(rng() * 3);
+          const points = [];
+          for (let step = 0; step < segments; step += 1) {
+            const t = step / (segments - 1) - .5;
+            const bend = (rng() - .5) * 120;
+            points.push({
+              x: x + Math.cos(angle) * length * t + Math.cos(angle + Math.PI / 2) * bend,
+              y: y + Math.sin(angle) * length * t + Math.sin(angle + Math.PI / 2) * bend
+            });
+          }
+          roads.push({ d: linePath(points), major: rng() > .72, local: true });
+        }
+      }
+
+      function renderRoads(group, cx, cy, generation, localWaters) {
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const maxX = minX + CHUNK;
+        const maxY = minY + CHUNK;
+        const roads = [];
+        const rng = rngFor(cx, cy, 540, generation);
+
+        roadLinesInChunk(cx, cy, "v").forEach((line) => {
+          const p = [];
+          for (let y = minY - 60; y <= maxY + 70; y += 90) {
+            p.push({ x: line.pos + Math.sin((y + line.index * 103 + ROAD_OFFSET_X) * .004) * (line.major ? 22 : 12), y });
+          }
+          roads.push({ d: linePath(p), major: line.major });
+        });
+
+        roadLinesInChunk(cx, cy, "h").forEach((line) => {
+          const p = [];
+          for (let x = minX - 60; x <= maxX + 70; x += 90) {
+            p.push({ x, y: line.pos + Math.sin((x + line.index * 83 + ROAD_OFFSET_Y) * .004) * (line.major ? 22 : 12) });
+          }
+          roads.push({ d: linePath(p), major: line.major });
+        });
+
+        addLocalRoads(roads, cx, cy, generation, localWaters);
+
+        roads.forEach((road) => {
+          el("path", { class: "road", d: road.d, "stroke-width": road.major ? 42 : road.local ? 24 : 30 }, group);
+        });
+        roads.forEach((road) => {
+          el("path", { class: "road-line", d: road.d, "stroke-width": road.major ? 3.4 : road.local ? 2 : 2.4 }, group);
+        });
+
+        roads.filter(() => rng() < .2).slice(0, 3).forEach((road) => {
+          el("path", { class: "path-block", d: road.d }, group);
+        });
+      }
+
+      function renderBuildings(group, cx, cy, generation, localWaters) {
+        const rng = rngFor(cx, cy, 410, generation);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        for (let i = 0; i < 20; i += 1) {
+          const w = 54 + rng() * 132;
+          const h = 38 + rng() * 112;
+          const x = minX + 34 + rng() * (CHUNK - w - 68);
+          const y = minY + 34 + rng() * (CHUNK - h - 68);
+          const roadX = ((x - ROAD_OFFSET_X) % ROAD_SPACING_X + ROAD_SPACING_X) % ROAD_SPACING_X;
+          const roadY = ((y - ROAD_OFFSET_Y) % ROAD_SPACING_Y + ROAD_SPACING_Y) % ROAD_SPACING_Y;
+          const nearRoad = Math.min(roadX, ROAD_SPACING_X - roadX, roadY, ROAD_SPACING_Y - roadY) < 34;
+          const water = inAnyWater(x + w * .5, y + h * .5, localWaters);
+          if (nearRoad || water || rng() < .2) continue;
+
+          const rotate = (rng() - .5) * 8;
+          const rect = el("rect", {
+            class: "building",
+            x: x.toFixed(1),
+            y: y.toFixed(1),
+            width: w.toFixed(1),
+            height: h.toFixed(1),
+            rx: rng() > .82 ? 5 : 1,
+            transform: `rotate(${rotate.toFixed(2)} ${(x + w / 2).toFixed(1)} ${(y + h / 2).toFixed(1)})`
+          }, group);
+          if (rng() > .58) {
+            el("rect", {
+              class: "building inner",
+              x: (x + w * .16).toFixed(1),
+              y: (y + h * .16).toFixed(1),
+              width: (w * .68).toFixed(1),
+              height: (h * .68).toFixed(1),
+              rx: 1,
+              transform: rect.getAttribute("transform")
+            }, group);
+          }
+        }
+
+        for (let i = 0; i < 8; i += 1) {
+          const x = minX + rng() * CHUNK;
+          const y = minY + rng() * CHUNK;
+          if (inAnyWater(x, y, localWaters)) continue;
+          const d = `M ${x.toFixed(1)} ${y.toFixed(1)} l ${(rng() * 150 - 75).toFixed(1)} ${(rng() * 130 - 65).toFixed(1)} l ${(rng() * 90 - 45).toFixed(1)} ${(rng() * 80 - 40).toFixed(1)}`;
+          el("path", { class: "minor-line", d }, group);
+        }
+      }
+
+      function poiIcon(parent, type) {
+        el("circle", { class: "pulse", r: 20 }, parent);
+        el("circle", { class: "ring", r: 18 }, parent);
+        el("path", { class: "mark", d: icons[type % icons.length], transform: "translate(-16 -16) scale(1)" }, parent);
+      }
+
+      function renderPois(group, cx, cy, generation, localWaters) {
+        const rng = rngFor(cx, cy, 650, generation);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const count = 1 + Math.floor(rng() * 3);
+        for (let i = 0; i < count; i += 1) {
+          const x = minX + 96 + rng() * (CHUNK - 192);
+          const y = minY + 96 + rng() * (CHUNK - 192);
+          if (inAnyWater(x, y, localWaters) || rng() < .32) continue;
+          const type = Math.floor(rng() * icons.length);
+          const poi = el("g", {
+            class: "poi",
+            tabindex: "0",
+            "data-x": x.toFixed(2),
+            "data-y": y.toFixed(2),
+            "data-type": type,
+            transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`
+          }, group);
+          poiIcon(poi, type);
+          poi.addEventListener("pointerdown", (event) => event.stopPropagation());
+          poi.addEventListener("click", () => selectPoi(poi));
+          poi.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") selectPoi(poi);
+          });
+        }
+      }
+
+      function renderBlocks(group, cx, cy, generation, localWaters) {
+        const rng = rngFor(cx, cy, 870, generation);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        const fixed = [
+          [minX + CHUNK * .5, minY + 0, .9],
+          [minX + CHUNK * .5, minY + CHUNK, .9],
+          [minX + 0, minY + CHUNK * .5, .82],
+          [minX + CHUNK, minY + CHUNK * .5, .82],
+          [minX + CHUNK * .25, minY + CHUNK * .5, .58],
+          [minX + CHUNK * .5, minY + CHUNK * .25, .58],
+          [minX + CHUNK * .75, minY + CHUNK * .5, .58],
+          [minX + CHUNK * .5, minY + CHUNK * .75, .58],
+          [minX + CHUNK * .33, minY + CHUNK * .33, .34],
+          [minX + CHUNK * .67, minY + CHUNK * .67, .34]
+        ];
+
+        const possible = fixed.map((item) => item);
+        const extraCount = 10 + Math.floor(rng() * 12);
+        for (let i = 0; i < extraCount; i += 1) {
+          const onRoad = rng() > .35;
+          const roadX = ROAD_OFFSET_X + Math.round((minX + rng() * CHUNK - ROAD_OFFSET_X) / ROAD_SPACING_X) * ROAD_SPACING_X;
+          const roadY = ROAD_OFFSET_Y + Math.round((minY + rng() * CHUNK - ROAD_OFFSET_Y) / ROAD_SPACING_Y) * ROAD_SPACING_Y;
+          possible.push([
+            onRoad ? roadX + (rng() - .5) * 46 : minX + 70 + rng() * (CHUNK - 140),
+            onRoad ? roadY + (rng() - .5) * 46 : minY + 70 + rng() * (CHUNK - 140),
+            .7
+          ]);
+          if (rng() > .55) {
+            possible.push([
+              minX + 70 + rng() * (CHUNK - 140),
+              minY + 70 + rng() * (CHUNK - 140),
+              .48
+            ]);
+          }
+        }
+
+        let placed = 0;
+        possible.forEach(([x, y, chance]) => {
+          const tooCloseToPlayer = Math.hypot(x - state.player.x, y - state.player.y) < 80;
+          const shouldForce = placed < 5 && !tooCloseToPlayer;
+          if ((shouldForce || rng() < chance) && !tooCloseToPlayer && !inAnyWater(x, y, localWaters)) {
+            placed += 1;
+            const block = el("g", {
+              class: "no-entry",
+              transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`
+            }, group);
+            el("circle", { class: "halo", r: 26 }, block);
+            el("circle", { class: "core", r: 20 }, block);
+            el("path", { class: "bar", d: "M -9 0 H 9" }, block);
+            block.addEventListener("pointerdown", (event) => event.stopPropagation());
+            block.addEventListener("click", () => {
+              block.classList.remove("bump");
+              block.getBoundingClientRect();
+              block.classList.add("bump");
+            });
+          }
+        });
+
+        let attempts = 0;
+        while (placed < 7 && attempts < 80) {
+          attempts += 1;
+          const x = minX + 90 + rng() * (CHUNK - 180);
+          const y = minY + 90 + rng() * (CHUNK - 180);
+          if (Math.hypot(x - state.player.x, y - state.player.y) < 80 || inAnyWater(x, y, localWaters)) continue;
+          placed += 1;
+          const block = el("g", {
+            class: "no-entry",
+            transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`
+          }, group);
+          el("circle", { class: "halo", r: 26 }, block);
+          el("circle", { class: "core", r: 20 }, block);
+          el("path", { class: "bar", d: "M -9 0 H 9" }, block);
+          block.addEventListener("pointerdown", (event) => event.stopPropagation());
+          block.addEventListener("click", () => {
+            block.classList.remove("bump");
+            block.getBoundingClientRect();
+            block.classList.add("bump");
+          });
+        }
+      }
+
+      function renderChunk(cx, cy) {
+        const key = `${cx},${cy}`;
+        if (loaded.has(key)) return;
+        const generation = ++chunkGeneration + Math.floor(Math.random() * 0x7fffffff);
+        const group = el("g", { "data-chunk": key }, world);
+        const minX = cx * CHUNK;
+        const minY = cy * CHUNK;
+        el("rect", { class: "chunk-bg", x: minX, y: minY, width: CHUNK, height: CHUNK }, group);
+        const localWaters = renderWater(group, cx, cy, generation);
+        renderBuildings(group, cx, cy, generation, localWaters);
+        renderRoads(group, cx, cy, generation, localWaters);
+        renderPois(group, cx, cy, generation, localWaters);
+        renderBlocks(group, cx, cy, generation, localWaters);
+        loaded.set(key, group);
+      }
+
+      function updateChunks() {
+        const halfW = state.width / state.zoom / 2;
+        const halfH = state.height / state.zoom / 2;
+        const centerX = -state.panX / state.zoom;
+        const centerY = -state.panY / state.zoom;
+        const minCx = Math.floor((centerX - halfW - CHUNK) / CHUNK);
+        const maxCx = Math.floor((centerX + halfW + CHUNK) / CHUNK);
+        const minCy = Math.floor((centerY - halfH - CHUNK) / CHUNK);
+        const maxCy = Math.floor((centerY + halfH + CHUNK) / CHUNK);
+
+        for (let cx = minCx; cx <= maxCx; cx += 1) {
+          for (let cy = minCy; cy <= maxCy; cy += 1) {
+            renderChunk(cx, cy);
+          }
+        }
+
+        loaded.forEach((group, key) => {
+          const [cx, cy] = key.split(",").map(Number);
+          if (cx < minCx - 2 || cx > maxCx + 2 || cy < minCy - 2 || cy > maxCy + 2) {
+            group.remove();
+            loaded.delete(key);
+          }
+        });
+      }
+
+      function updateTransform() {
+        svg.setAttribute("viewBox", `0 0 ${state.width} ${state.height}`);
+        const transform = `translate(${state.width / 2 + state.panX} ${state.height / 2 + state.panY}) scale(${state.zoom})`;
+        world.setAttribute("transform", transform);
+        fx.setAttribute("transform", transform);
+        playerEl.setAttribute("transform", `${transform} translate(${state.player.x} ${state.player.y}) scale(${1 / state.zoom})`);
+      }
+
+      function resize() {
+        state.width = window.innerWidth;
+        state.height = window.innerHeight;
+        updateTransform();
+        updateChunks();
+      }
+
+      function selectPoi(poi) {
+        if (state.activePoi) state.activePoi.classList.remove("is-active");
+        state.activePoi = poi;
+        poi.classList.add("is-active");
+        const x = Number(poi.dataset.x);
+        const y = Number(poi.dataset.y);
+        state.playerStart = { ...state.player };
+        state.playerTarget = { x, y };
+        state.playerT = 0;
+        poiChip.classList.add("active");
+        const type = Number(poi.dataset.type || 0);
+        poiChip.querySelector("svg").innerHTML = `<path d="${icons[type]}"></path>`;
+      }
+
+      function zoomAt(factor, sx = state.width / 2, sy = state.height / 2) {
+        const beforeX = (sx - state.width / 2 - state.panX) / state.zoom;
+        const beforeY = (sy - state.height / 2 - state.panY) / state.zoom;
+        state.zoom = Math.max(.56, Math.min(2.35, state.zoom * factor));
+        state.panX = sx - state.width / 2 - beforeX * state.zoom;
+        state.panY = sy - state.height / 2 - beforeY * state.zoom;
+        updateTransform();
+        updateChunks();
+      }
+
+      function centerPlayer() {
+        state.panX = -state.player.x * state.zoom;
+        state.panY = -state.player.y * state.zoom;
+        updateTransform();
+        updateChunks();
+      }
+
+      function tick(time) {
+        const dt = Math.min(32, time - state.lastTime || 16);
+        state.lastTime = time;
+        if (state.playerT < 1) {
+          state.playerT = Math.min(1, state.playerT + dt / 620);
+          const ease = 1 - Math.pow(1 - state.playerT, 3);
+          state.player.x = state.playerStart.x + (state.playerTarget.x - state.playerStart.x) * ease;
+          state.player.y = state.playerStart.y + (state.playerTarget.y - state.playerStart.y) * ease;
+          updateTransform();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      svg.addEventListener("pointerdown", (event) => {
+        state.dragging = true;
+        state.dragStartX = event.clientX;
+        state.dragStartY = event.clientY;
+        state.panStartX = state.panX;
+        state.panStartY = state.panY;
+        svg.classList.add("is-dragging");
+        svg.setPointerCapture(event.pointerId);
+      });
+
+      svg.addEventListener("pointermove", (event) => {
+        if (!state.dragging) return;
+        state.panX = state.panStartX + event.clientX - state.dragStartX;
+        state.panY = state.panStartY + event.clientY - state.dragStartY;
+        updateTransform();
+        updateChunks();
+      });
+
+      function stopDrag(event) {
+        state.dragging = false;
+        svg.classList.remove("is-dragging");
+        if (event.pointerId !== undefined && svg.hasPointerCapture(event.pointerId)) {
+          svg.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      svg.addEventListener("pointerup", stopDrag);
+      svg.addEventListener("pointercancel", stopDrag);
+
+      svg.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        zoomAt(event.deltaY < 0 ? 1.12 : .89, event.clientX, event.clientY);
+      }, { passive: false });
+
+      zoomIn.addEventListener("click", () => zoomAt(1.16));
+      zoomOut.addEventListener("click", () => zoomAt(.86));
+      centerButton.addEventListener("click", centerPlayer);
+      window.addEventListener("resize", resize);
+
+      resize();
+      centerPlayer();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
