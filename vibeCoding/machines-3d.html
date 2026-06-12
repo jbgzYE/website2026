@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>平步机与漫步机 3D 模型</title>
+  <style>
+    :root {
+      --panel: rgba(255, 255, 255, .86);
+      --panel-strong: rgba(255, 255, 255, .96);
+      --ink: #18211d;
+      --muted: #5e6862;
+      --line: rgba(29, 43, 36, .14);
+      --green: #0f5d3d;
+      --blue: #1454ad;
+      --shadow: rgba(20, 32, 26, .2);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      background: #dde8e1;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      user-select: none;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(14, 91, 59, .55) rgba(255, 255, 255, .2);
+    }
+
+    body {
+      min-height: 100dvh;
+    }
+
+    .app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(190, 220, 232, .72) 0%, rgba(226, 237, 223, .82) 48%, rgba(215, 229, 207, .92) 100%);
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    .scroll-space {
+      height: 180000px;
+      pointer-events: none;
+    }
+
+    .badge {
+      position: fixed;
+      left: max(16px, env(safe-area-inset-left));
+      top: max(16px, env(safe-area-inset-top));
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      box-shadow: 0 12px 30px rgba(20, 32, 26, .12);
+      backdrop-filter: blur(16px);
+      pointer-events: none;
+    }
+
+    .badge strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.15;
+    }
+
+    .badge span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .toolbar {
+      position: fixed;
+      left: 50%;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      width: min(180px, calc(100vw - 28px));
+      transform: translateX(-50%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 42px var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .button {
+      height: 42px;
+      min-width: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-strong);
+      color: var(--ink);
+      display: inline-grid;
+      place-items: center;
+      gap: 7px;
+      grid-auto-flow: column;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 720;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 5px 14px rgba(27, 37, 31, .1);
+    }
+
+    .button svg {
+      width: 19px;
+      height: 19px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .button:active {
+      transform: translateY(1px);
+    }
+
+    @media (max-width: 720px) {
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main class="app" aria-label="平步机与漫步机 3D 模型展示">
+    <div class="badge" aria-hidden="true">
+      <strong>滚动生成器械</strong>
+      <span>踏板速度跟随滚动速度</span>
+    </div>
+    <div class="toolbar" aria-label="模型控制">
+      <button class="button" id="resetView" type="button" aria-label="重置视角">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 12a8 8 0 1 0 2.35-5.65"></path>
+          <path d="M4 4v6h6"></path>
+        </svg>
+        <span>重置</span>
+      </button>
+    </div>
+  </main>
+  <div class="scroll-space" aria-hidden="true"></div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const app = document.querySelector(".app");
+    const resetView = document.querySelector("#resetView");
+    const scrollSpace = document.querySelector(".scroll-space");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xdcebe4);
+    scene.fog = new THREE.Fog(0xdcebe4, 8, 34);
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80);
+    const defaultCameraPosition = new THREE.Vector3(6.2, 4.4, 9.8);
+    const defaultTarget = new THREE.Vector3(0, 1.35, -3.4);
+    camera.position.copy(defaultCameraPosition);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    app.prepend(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.minDistance = 5.2;
+    controls.maxDistance = 15;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.target.copy(defaultTarget);
+
+    const mats = {
+      green: new THREE.MeshStandardMaterial({ color: 0x0e5b3b, roughness: 0.42, metalness: 0.08 }),
+      darkGreen: new THREE.MeshStandardMaterial({ color: 0x083721, roughness: 0.46, metalness: 0.1 }),
+      yellow: new THREE.MeshStandardMaterial({ color: 0xf2c21c, roughness: 0.42, metalness: 0.18 }),
+      yellowDark: new THREE.MeshStandardMaterial({ color: 0xd6a713, roughness: 0.5, metalness: 0.2 }),
+      blue: new THREE.MeshStandardMaterial({ color: 0x1251b2, roughness: 0.4, metalness: 0.18 }),
+      blueDark: new THREE.MeshStandardMaterial({ color: 0x0b3382, roughness: 0.48, metalness: 0.2 }),
+      black: new THREE.MeshStandardMaterial({ color: 0x080a09, roughness: 0.56, metalness: 0.18 }),
+      rubber: new THREE.MeshStandardMaterial({ color: 0x171817, roughness: 0.72, metalness: 0.05 }),
+      metal: new THREE.MeshStandardMaterial({ color: 0xbfc3b8, roughness: 0.27, metalness: 0.78 }),
+      brushed: new THREE.MeshStandardMaterial({ color: 0x8f968d, roughness: 0.22, metalness: 0.86 }),
+      walkerStep: new THREE.MeshStandardMaterial({ color: 0xcec6a2, roughness: 0.4, metalness: 0.36 }),
+      stepperStep: new THREE.MeshStandardMaterial({ color: 0xf4c932, roughness: 0.46, metalness: 0.24 }),
+      cap: new THREE.MeshStandardMaterial({ color: 0xf7d758, roughness: 0.32, metalness: 0.35 }),
+      grass: new THREE.MeshStandardMaterial({ color: 0x7da143, roughness: 0.86, metalness: 0.02 }),
+      dirt: new THREE.MeshStandardMaterial({ color: 0x506b2d, roughness: 1, metalness: 0 })
+    };
+
+    let activeMachine = null;
+    let currentStepMaterial = mats.walkerStep;
+
+    function cylinder(radiusTop, radiusBottom, height, material, radialSegments = 40) {
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(radiusTop, radiusBottom, height, radialSegments),
+        material
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    function box(width, height, depth, material) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    function roundedPlate(width, depth, height) {
+      const shape = new THREE.Shape();
+      const r = Math.min(width, depth) * 0.22;
+      const x = -width / 2;
+      const y = -depth / 2;
+      shape.moveTo(x + r, y);
+      shape.lineTo(x + width - r, y);
+      shape.quadraticCurveTo(x + width, y, x + width, y + r);
+      shape.lineTo(x + width, y + depth - r);
+      shape.quadraticCurveTo(x + width, y + depth, x + width - r, y + depth);
+      shape.lineTo(x + r, y + depth);
+      shape.quadraticCurveTo(x, y + depth, x, y + depth - r);
+      shape.lineTo(x, y + r);
+      shape.quadraticCurveTo(x, y, x + r, y);
+
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: height,
+        bevelEnabled: true,
+        bevelThickness: 0.035,
+        bevelSize: 0.035,
+        bevelSegments: 5
+      });
+      geometry.rotateX(Math.PI / 2);
+      geometry.translate(0, height / 2, 0);
+      const plate = new THREE.Mesh(geometry, currentStepMaterial);
+      plate.castShadow = true;
+      plate.receiveShadow = true;
+      return plate;
+    }
+
+    function addCylinderBetween(parent, start, end, radius, material) {
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const mesh = cylinder(radius, radius, direction.length(), material, 24);
+      mesh.position.copy(mid);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      parent.add(mesh);
+      return mesh;
+    }
+
+    function makeTube(points, radius, material) {
+      const curve = new THREE.CatmullRomCurve3(points);
+      const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, radius, 18, false), material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    function makeGrass(width = 7.5, depth = 2.45) {
+      const base = box(width, 0.16, depth, mats.grass);
+      base.position.y = -0.08;
+      activeMachine.add(base);
+
+      const trim = box(width + 0.2, 0.08, depth + 0.2, mats.dirt);
+      trim.position.y = -0.16;
+      activeMachine.add(trim);
+
+      for (let i = 0; i < 90; i += 1) {
+        const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.018, 0.11), mats.grass);
+        blade.position.set((Math.random() - 0.5) * (width - 0.4), 0.045, (Math.random() - 0.5) * (depth - 0.4));
+        blade.rotation.set(-Math.PI / 2 + (Math.random() - 0.5) * 0.7, 0, Math.random() * Math.PI);
+        blade.receiveShadow = true;
+        activeMachine.add(blade);
+      }
+    }
+
+    function makeWalkerPost(x) {
+      const post = cylinder(0.15, 0.15, 2.62, mats.green, 48);
+      post.position.set(x, 1.31, 0);
+      activeMachine.add(post);
+
+      const base = cylinder(0.28, 0.36, 0.16, mats.black, 48);
+      base.position.set(x, 0.08, 0);
+      activeMachine.add(base);
+
+      const collar = cylinder(0.17, 0.17, 0.1, mats.darkGreen, 40);
+      collar.position.set(x, 0.21, 0);
+      activeMachine.add(collar);
+
+      const cap = cylinder(0.135, 0.15, 0.12, mats.cap, 48);
+      cap.position.set(x, 2.68, 0);
+      activeMachine.add(cap);
+
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.15, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), mats.cap);
+      dome.position.set(x, 2.74, 0);
+      dome.castShadow = true;
+      dome.receiveShadow = true;
+      activeMachine.add(dome);
+    }
+
+    function makeCenterAxle(x, z, side = 1) {
+      const axleLength = 0.56;
+      const axle = cylinder(0.075, 0.075, axleLength, mats.metal, 32);
+      axle.position.set(x + side * axleLength * 0.5, 2.18, z);
+      axle.rotation.z = Math.PI / 2;
+      activeMachine.add(axle);
+
+      const knob = cylinder(0.09, 0.09, 0.07, mats.rubber, 28);
+      knob.position.set(x + side * (axleLength + 0.035), 2.18, z);
+      knob.rotation.z = Math.PI / 2;
+      activeMachine.add(knob);
+    }
+
+    function makeWalkerSide(x, z, phase, inward) {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 2.18, z);
+      activeMachine.add(pivot);
+
+      const yDrop = 1.52;
+      const rodSpread = 0.13;
+      addCylinderBetween(pivot, new THREE.Vector3(0, 0, -rodSpread), new THREE.Vector3(0, -yDrop, -rodSpread), 0.038, mats.brushed);
+      addCylinderBetween(pivot, new THREE.Vector3(0, 0, rodSpread), new THREE.Vector3(0, -yDrop, rodSpread), 0.045, mats.brushed);
+
+      const lowerBar = cylinder(0.045, 0.045, 0.36, mats.brushed, 24);
+      lowerBar.position.set(0, -yDrop, 0);
+      lowerBar.rotation.x = Math.PI / 2;
+      pivot.add(lowerBar);
+
+      const plate = roundedPlate(0.38, 0.82, 0.07);
+      plate.position.set(inward * 0.05, -yDrop - 0.045, 0);
+      plate.rotation.y = inward * -0.03;
+      pivot.add(plate);
+
+      const treadMat = new THREE.MeshStandardMaterial({ color: 0x827b62, roughness: 0.72, metalness: 0.18 });
+      for (let i = -2; i <= 2; i += 1) {
+        const strip = box(0.24, 0.014, 0.055, treadMat);
+        strip.position.set(inward * 0.05, -yDrop + 0.016, i * 0.115);
+        pivot.add(strip);
+      }
+
+      const stop = cylinder(0.07, 0.07, 0.12, mats.metal, 24);
+      stop.position.set(0, 0, 0);
+      stop.rotation.x = Math.PI / 2;
+      pivot.add(stop);
+
+      return { pivot, phase };
+    }
+
+    function makeWalkerHandlebar() {
+      const rail = makeTube([
+        new THREE.Vector3(-3.05, 2.55, -0.1),
+        new THREE.Vector3(-2.87, 2.72, -0.1),
+        new THREE.Vector3(-1.25, 2.72, -0.1),
+        new THREE.Vector3(-0.34, 2.72, -0.1),
+        new THREE.Vector3(0, 2.74, -0.1),
+        new THREE.Vector3(0.22, 2.72, -0.1),
+        new THREE.Vector3(1.25, 2.72, -0.1),
+        new THREE.Vector3(2.87, 2.72, -0.1),
+        new THREE.Vector3(3.05, 2.55, -0.1)
+      ], 0.055, mats.green);
+      activeMachine.add(rail);
+    }
+
+    function createWalkerMachine() {
+      const machine = new THREE.Group();
+      const walkers = [];
+      activeMachine = machine;
+      currentStepMaterial = mats.walkerStep;
+      makeGrass(7.5, 2.45);
+      [-3, 0, 3].forEach(makeWalkerPost);
+      makeWalkerHandlebar();
+
+      const pivotZ = 0.33;
+      [
+        { leftPost: -3, rightPost: 0, phase: 0 },
+        { leftPost: 0, rightPost: 3, phase: Math.PI }
+      ].forEach(({ leftPost, rightPost, phase }) => {
+        const leftPivotX = leftPost + 0.095;
+        const rightPivotX = rightPost - 0.095;
+        makeCenterAxle(leftPivotX, pivotZ, 1);
+        makeCenterAxle(rightPivotX, pivotZ, -1);
+        walkers.push(makeWalkerSide(leftPivotX, pivotZ, phase, 1));
+        walkers.push(makeWalkerSide(rightPivotX, pivotZ, phase + Math.PI, -1));
+      });
+
+      machine.userData.walkers = walkers;
+      activeMachine = null;
+      return machine;
+    }
+
+    function makeFootBar(x, z, width = 1.9) {
+      const foot = box(width, 0.08, 0.15, mats.blue);
+      foot.position.set(x, 0.04, z);
+      activeMachine.add(foot);
+
+      [-1, 1].forEach((side) => {
+        const cap = cylinder(0.075, 0.075, 0.1, mats.blueDark, 24);
+        cap.position.set(x + side * width / 2, 0.04, z);
+        cap.rotation.z = Math.PI / 2;
+        activeMachine.add(cap);
+      });
+    }
+
+    function makePedestal(x, z, height, width = 0.34) {
+      const core = box(width, height, 0.26, mats.blue);
+      core.position.set(x, height / 2, z);
+      activeMachine.add(core);
+
+      [-1, 1].forEach((side) => {
+        const post = cylinder(0.065, 0.065, height + 0.16, mats.yellow, 32);
+        post.position.set(x + side * (width * 0.5 + 0.16), (height + 0.16) / 2, z);
+        activeMachine.add(post);
+
+        const foot = cylinder(0.12, 0.15, 0.09, mats.yellowDark, 32);
+        foot.position.set(x + side * (width * 0.5 + 0.16), 0.045, z);
+        activeMachine.add(foot);
+      });
+
+      const cross = cylinder(0.075, 0.075, width + 0.52, mats.yellow, 32);
+      cross.position.set(x, height + 0.08, z);
+      cross.rotation.z = Math.PI / 2;
+      activeMachine.add(cross);
+    }
+
+    function makeStepperDeck() {
+      const deck = box(2.7, 0.08, 0.15, mats.yellow);
+      deck.position.set(0, 0.22, 0.55);
+      activeMachine.add(deck);
+
+      [-0.55, 0.55].forEach((x) => {
+        const rail = box(0.12, 0.08, 2.35, mats.yellow);
+        rail.position.set(x, 0.24, 0.26);
+        activeMachine.add(rail);
+
+        const sideSkid = box(0.1, 0.07, 2.75, mats.blue);
+        sideSkid.position.set(x * 1.88, 0.08, 0.28);
+        activeMachine.add(sideSkid);
+      });
+    }
+
+    function makeGlidePedal(x, phase) {
+      const carriage = new THREE.Group();
+      carriage.position.set(x, 0.36, 0.18);
+      carriage.userData.homeZ = carriage.position.z;
+      activeMachine.add(carriage);
+
+      const plate = roundedPlate(0.42, 0.88, 0.07);
+      plate.rotation.y = x > 0 ? -0.02 : 0.02;
+      carriage.add(plate);
+
+      const treadMat = new THREE.MeshStandardMaterial({ color: 0x9d801c, roughness: 0.78, metalness: 0.15 });
+      for (let i = -2; i <= 2; i += 1) {
+        const strip = box(0.27, 0.014, 0.055, treadMat);
+        strip.position.set(0, 0.056, i * 0.13);
+        carriage.add(strip);
+      }
+
+      const hanger = makeTube([
+        new THREE.Vector3(0, 0.08, -0.34),
+        new THREE.Vector3(0, 0.55, -0.38),
+        new THREE.Vector3(0, 0.72, -0.18)
+      ], 0.04, mats.blue);
+      carriage.add(hanger);
+
+      return { carriage, phase };
+    }
+
+    function makeStepperHandlebar() {
+      [-0.55, 0.55].forEach((x) => {
+        const handle = makeTube([
+          new THREE.Vector3(x, 1.75, -0.76),
+          new THREE.Vector3(x * 1.08, 2.05, -0.78),
+          new THREE.Vector3(x * 1.28, 2.35, -0.76),
+          new THREE.Vector3(x * 1.38, 2.88, -0.72)
+        ], 0.06, mats.yellow);
+        activeMachine.add(handle);
+
+        const grip = cylinder(0.07, 0.07, 0.44, mats.rubber, 32);
+        grip.position.set(x * 1.38, 3.08, -0.72);
+        grip.rotation.x = Math.PI / 2;
+        activeMachine.add(grip);
+      });
+
+      const rearHandle = makeTube([
+        new THREE.Vector3(-0.34, 0.72, 0.98),
+        new THREE.Vector3(-0.28, 0.98, 0.92),
+        new THREE.Vector3(0, 1.08, 0.88),
+        new THREE.Vector3(0.28, 0.98, 0.92),
+        new THREE.Vector3(0.34, 0.72, 0.98)
+      ], 0.045, mats.blue);
+      activeMachine.add(rearHandle);
+    }
+
+    function createStepperMachine() {
+      const machine = new THREE.Group();
+      const gliders = [];
+      activeMachine = machine;
+      currentStepMaterial = mats.stepperStep;
+      makeGrass(3.8, 3.2);
+      makeFootBar(0, -0.94, 2.4);
+      makeFootBar(0, 1.46, 1.8);
+      makeStepperDeck();
+      makePedestal(0, -0.72, 1.62, 0.32);
+      makePedestal(0, 0.96, 1.02, 0.28);
+      makeStepperHandlebar();
+
+      gliders.push(makeGlidePedal(-0.36, 0));
+      gliders.push(makeGlidePedal(0.36, Math.PI));
+
+      [-0.56, 0.56].forEach((x) => {
+        const stopperFront = cylinder(0.08, 0.08, 0.12, mats.cap, 24);
+        stopperFront.position.set(x, 0.34, -0.92);
+        activeMachine.add(stopperFront);
+
+        const stopperBack = cylinder(0.08, 0.08, 0.12, mats.cap, 24);
+        stopperBack.position.set(x, 0.34, 1.28);
+        activeMachine.add(stopperBack);
+      });
+
+      machine.userData.gliders = gliders;
+      activeMachine = null;
+      return machine;
+    }
+
+    const fillLights = [
+      new THREE.HemisphereLight(0xe7f5ff, 0x50633e, 1.55),
+      new THREE.AmbientLight(0xffffff, 0.32)
+    ];
+    fillLights.forEach((light) => scene.add(light));
+
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+    sun.position.set(4, 7, 4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 20;
+    sun.shadow.camera.left = -8;
+    sun.shadow.camera.right = 8;
+    sun.shadow.camera.top = 6;
+    sun.shadow.camera.bottom = -6;
+    scene.add(sun);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(52, 52),
+      new THREE.ShadowMaterial({ opacity: 0.18 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.18;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const machines = [];
+    const rowSpacing = 5.8;
+    const scrollPixelsPerRow = 460;
+    const visibleMachineCount = 34;
+    let scrollSpaceHeight = 180000;
+
+    resetView.addEventListener("click", () => {
+      camera.position.copy(defaultCameraPosition);
+      controls.target.copy(defaultTarget);
+      controls.update();
+    });
+
+    function seededRandom(seed) {
+      let value = Math.sin(seed * 127.1 + 311.7) * 43758.5453123;
+      return value - Math.floor(value);
+    }
+
+    function randomRange(seed, min, max) {
+      return min + seededRandom(seed) * (max - min);
+    }
+
+    function disposeObject(object) {
+      object.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+      });
+    }
+
+    function removeMachineChildren(slot) {
+      while (slot.children.length > 0) {
+        const child = slot.children[0];
+        slot.remove(child);
+        disposeObject(child);
+      }
+    }
+
+    function buildMachineForRow(slot, rowIndex) {
+      removeMachineChildren(slot);
+
+      const type = seededRandom(rowIndex + 10) > 0.5 ? "walker" : "stepper";
+      const machine = type === "walker" ? createWalkerMachine() : createStepperMachine();
+      machine.scale.setScalar(type === "walker" ? 0.74 : 0.88);
+      machine.position.y = type === "walker" ? 0 : -0.02;
+      slot.add(machine);
+
+      slot.userData.rowIndex = rowIndex;
+      slot.userData.machine = machine;
+      slot.userData.type = type;
+      slot.userData.xOffset = randomRange(rowIndex + 20, -2.2, 2.2);
+      slot.userData.rotationX = randomRange(rowIndex + 30, -0.34, 0.34);
+      slot.userData.rotationY = randomRange(rowIndex + 40, -Math.PI, Math.PI);
+      slot.userData.rotationZ = randomRange(rowIndex + 50, -0.38, 0.38);
+      slot.userData.scale = randomRange(rowIndex + 60, 0.82, 1.08);
+    }
+
+    function makeSlot(index) {
+      const slot = new THREE.Group();
+      slot.userData.rowIndex = Number.NaN;
+      scene.add(slot);
+      machines.push(slot);
+      buildMachineForRow(slot, index);
+      return slot;
+    }
+
+    function ensureScrollSpace() {
+      const remaining = scrollSpaceHeight - (window.scrollY + window.innerHeight);
+      if (remaining < 12000) {
+        scrollSpaceHeight += 90000;
+        scrollSpace.style.height = `${scrollSpaceHeight}px`;
+      }
+    }
+
+    function syncMachineRows() {
+      ensureScrollSpace();
+      const width = window.innerWidth;
+      const rowFloat = window.scrollY / scrollPixelsPerRow;
+      const centerRow = Math.floor(rowFloat);
+      const progress = rowFloat - centerRow;
+      const mobileScale = width < 560 ? 0.72 : 1;
+
+      machines.forEach((slot, index) => {
+        const rowIndex = centerRow + index;
+        if (slot.userData.rowIndex !== rowIndex) {
+          buildMachineForRow(slot, rowIndex);
+        }
+
+        const depth = ((index + 0.18) - progress) * rowSpacing;
+        slot.position.set(slot.userData.xOffset * mobileScale, 0, -depth);
+        slot.rotation.set(slot.userData.rotationX, slot.userData.rotationY, slot.userData.rotationZ);
+        slot.scale.setScalar(slot.userData.scale * mobileScale);
+        slot.visible = depth > -7 && depth < rowSpacing * (visibleMachineCount + 0.5);
+      });
+    }
+
+    function resize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+      syncMachineRows();
+    }
+
+    Array.from({ length: visibleMachineCount }, (_, index) => makeSlot(index));
+    window.addEventListener("resize", resize);
+    window.addEventListener("scroll", syncMachineRows, { passive: true });
+    resize();
+    syncMachineRows();
+
+    scrollSpace.style.height = `${scrollSpaceHeight}px`;
+
+    const state = {
+      time: 0,
+      scrollPosition: window.scrollY,
+      lastScrollPosition: window.scrollY,
+      scrollVelocity: 0
+    };
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = Math.min(0.04, (now - last) / 1000);
+      last = now;
+
+      state.scrollPosition = window.scrollY;
+      const scrollDelta = state.scrollPosition - state.lastScrollPosition;
+      state.lastScrollPosition = state.scrollPosition;
+      const instantVelocity = dt > 0 ? scrollDelta / dt : 0;
+      state.scrollVelocity += (instantVelocity - state.scrollVelocity) * 0.22;
+      if (Math.abs(state.scrollVelocity) < 3) state.scrollVelocity = 0;
+      state.time += Math.abs(state.scrollVelocity) * dt * 0.018;
+      syncMachineRows();
+
+      machines.forEach((slot) => {
+        const machine = slot.userData.machine;
+        if (!slot.visible || !machine) return;
+
+        if (slot.userData.type === "walker") {
+          machine.userData.walkers.forEach(({ pivot, phase }) => {
+            const swing = Math.sin(state.time * 2.15 + phase) * THREE.MathUtils.degToRad(23);
+            pivot.rotation.x = swing;
+            pivot.rotation.z = Math.sin(state.time * 2.15 + phase) * 0.025;
+          });
+        } else {
+          machine.userData.gliders.forEach(({ carriage, phase }) => {
+            const stride = Math.sin(state.time * 2.15 + phase) * 0.22;
+            carriage.position.z = carriage.userData.homeZ + stride;
+            carriage.rotation.x = Math.sin(state.time * 2.15 + phase) * 0.018;
+          });
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

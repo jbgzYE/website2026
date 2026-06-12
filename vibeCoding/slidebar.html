@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slidebar</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f7f8fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    input[type="range"] {
+      height: 36px;
+      margin: 0;
+      accent-color: #6f6a61;
+      cursor: pointer;
+    }
+
+    .control {
+      width: min(72vw, 520px);
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 1000;
+      transform: translate(-50%, -50%);
+    }
+
+    .random-slider {
+      position: absolute;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <input class="control" type="range" min="0" max="100" value="0" aria-label="滑动条">
+
+  <script>
+    const control = document.querySelector(".control");
+    const sliders = [];
+
+    function randomBetween(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function deleteRandomSliders(count, sourceSlider = null) {
+      for (let i = 0; i < count; i += 1) {
+        const candidates = sliders.filter((slider) => slider !== sourceSlider);
+
+        if (candidates.length === 0) {
+          return;
+        }
+
+        const sliderToRemove = candidates[Math.floor(randomBetween(0, candidates.length))];
+        const sliderIndex = sliders.indexOf(sliderToRemove);
+
+        if (sliderIndex >= 0) {
+          sliders.splice(sliderIndex, 1);
+        }
+
+        sliderToRemove.remove();
+      }
+    }
+
+    function attachSliderBehavior(slider) {
+      slider.dataset.lastValue = slider.value;
+
+      slider.addEventListener("input", () => {
+        const currentValue = Number(slider.value);
+        const lastValue = Number(slider.dataset.lastValue);
+        const movement = currentValue - lastValue;
+        const amount = Math.floor(Math.abs(movement) / 2);
+
+        if (amount === 0) {
+          return;
+        }
+
+        if (movement > 0) {
+          for (let i = 0; i < amount; i += 1) {
+            createRandomSlider();
+          }
+
+          slider.dataset.lastValue = String(lastValue + amount * 2);
+          return;
+        }
+
+        deleteRandomSliders(amount, slider);
+        slider.dataset.lastValue = String(lastValue - amount * 2);
+      });
+    }
+
+    function getControlQuota() {
+      return Math.max(0, Math.round(Number(control.value) / 2) - 1);
+    }
+
+    function createRandomSlider() {
+      const slider = document.createElement("input");
+      const width = randomBetween(90, 340);
+
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "100";
+      slider.value = String(Math.round(randomBetween(0, 100)));
+      slider.className = "random-slider";
+      slider.style.width = `${width}px`;
+      slider.style.left = `${randomBetween(0, Math.max(0, window.innerWidth - width))}px`;
+      slider.style.top = `${randomBetween(0, Math.max(0, window.innerHeight - 36))}px`;
+
+      attachSliderBehavior(slider);
+      document.body.append(slider);
+      sliders.push(slider);
+    }
+
+    function syncControlMovement() {
+      const currentQuota = getControlQuota();
+      const lastQuota = Number(control.dataset.lastQuota);
+      const change = currentQuota - lastQuota;
+
+      if (change > 0) {
+        for (let i = 0; i < change; i += 1) {
+          createRandomSlider();
+        }
+      }
+
+      if (change < 0) {
+        deleteRandomSliders(Math.abs(change));
+      }
+
+      control.dataset.lastQuota = String(currentQuota);
+    }
+
+    control.dataset.lastQuota = String(getControlQuota());
+    control.addEventListener("input", syncControlMovement);
+  </script>
+</body>
+</html>
