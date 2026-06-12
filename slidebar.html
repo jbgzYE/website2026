@@ -55,6 +55,14 @@
       return Math.random() * (max - min) + min;
     }
 
+    function randomSliderColor() {
+      const hue = Math.round(randomBetween(0, 360));
+      const saturation = Math.round(randomBetween(45, 85));
+      const lightness = Math.round(randomBetween(42, 62));
+
+      return `hsl(${hue} ${saturation}% ${lightness}%)`;
+    }
+
     function deleteRandomSliders(count, sourceSlider = null) {
       for (let i = 0; i < count; i += 1) {
         const candidates = sliders.filter((slider) => slider !== sourceSlider);
@@ -117,6 +125,7 @@
       slider.style.width = `${width}px`;
       slider.style.left = `${randomBetween(0, Math.max(0, window.innerWidth - width))}px`;
       slider.style.top = `${randomBetween(0, Math.max(0, window.innerHeight - 36))}px`;
+      slider.style.accentColor = randomSliderColor();
 
       attachSliderBehavior(slider);
       document.body.append(slider);
