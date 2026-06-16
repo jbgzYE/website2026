@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>塞尔达隐藏分记录</title>
+  <link rel="icon" type="image/png" href="thumbnail.png">
+  <link rel="apple-touch-icon" href="thumbnail.png">
+  <meta property="og:image" content="thumbnail.png">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f1e8;
+      --surface: #fffdf8;
+      --surface-2: #f2eadc;
+      --line: #d9cdbc;
+      --text: #27231d;
+      --muted: #786f61;
+      --red: #c62828;
+      --blue: #1f78a8;
+      --purple: #7a3f98;
+      --green: #54681f;
+      --accent: #2f6f4e;
+      --accent-dark: #1f5238;
+      --shadow: 0 10px 28px rgba(63, 46, 28, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background:
+        linear-gradient(135deg, rgba(47, 111, 78, 0.08), transparent 36%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 16px clamp(14px, 3vw, 34px);
+      background: rgba(255, 253, 248, 0.94);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 4px 18px rgba(63, 46, 28, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    .title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: baseline;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(20px, 2.3vw, 30px);
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .reference {
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .score-panel {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .total-card {
+      min-width: 172px;
+      padding: 10px 14px;
+      border: 1px solid #c9ddcf;
+      border-radius: 8px;
+      background: #f7fff8;
+      text-align: right;
+    }
+
+    .total-label {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .total-score {
+      display: block;
+      color: var(--accent-dark);
+      font-size: clamp(26px, 4vw, 42px);
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .reset-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid #c9b7a2;
+      border-radius: 7px;
+      background: #fff8ed;
+      color: #67452b;
+      cursor: pointer;
+    }
+
+    .reset-button:hover {
+      background: #f6ead8;
+    }
+
+    main {
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 22px clamp(12px, 3vw, 34px) 40px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .category {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .category-header {
+      display: grid;
+      grid-template-columns: minmax(130px, 1.2fr) 86px minmax(178px, 1.7fr) 92px;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .category-name {
+      color: var(--red);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .monster-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 1.2fr) 86px minmax(178px, 1.7fr) 92px;
+      gap: 10px;
+      align-items: center;
+      min-height: 48px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eadfce;
+    }
+
+    .monster-row:last-child {
+      border-bottom: 0;
+    }
+
+    .monster-name {
+      min-width: 0;
+      font-size: 17px;
+      font-weight: 650;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .tier-blue {
+      color: var(--blue);
+    }
+
+    .tier-purple {
+      color: var(--purple);
+    }
+
+    .score-unit,
+    .row-score {
+      font-size: 17px;
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .row-score {
+      color: var(--accent-dark);
+    }
+
+    .checks {
+      display: grid;
+      grid-template-columns: repeat(10, 22px);
+      gap: 6px;
+      align-items: center;
+    }
+
+    .checks.one {
+      grid-template-columns: 30px;
+    }
+
+    .check {
+      width: 22px;
+      aspect-ratio: 1;
+      border: 1px solid #a99d8f;
+      border-radius: 5px;
+      background: #fff;
+      cursor: pointer;
+      transition: background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
+    }
+
+    .checks.one .check {
+      width: 30px;
+    }
+
+    .check:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .check.active {
+      border-color: var(--accent-dark);
+      background:
+        linear-gradient(135deg, transparent 0 42%, rgba(255, 255, 255, 0.38) 42% 58%, transparent 58%),
+        var(--accent);
+    }
+
+    .summary-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
+      color: var(--green);
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .summary-pill {
+      padding: 7px 10px;
+      border: 1px solid #cad2ab;
+      border-radius: 7px;
+      background: #fbfff0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .empty-note {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    @media (max-width: 1080px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .score-panel {
+        justify-content: stretch;
+      }
+
+      .total-card {
+        flex: 1;
+      }
+
+      .category-header,
+      .monster-row {
+        grid-template-columns: minmax(108px, 1fr) 68px;
+      }
+
+      .category-header span:nth-child(3),
+      .category-header span:nth-child(4) {
+        display: none;
+      }
+
+      .checks,
+      .checks.one {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(auto-fill, 24px);
+      }
+
+      .check {
+        width: 24px;
+      }
+
+      .checks.one .check {
+        width: 30px;
+      }
+
+      .row-score {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .category-name {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">
+      <h1>塞尔达隐藏分记录</h1>
+      <span class="reference">参考总计：普通 2630 / 大师 3340</span>
+    </div>
+    <div class="score-panel">
+      <div class="total-card" aria-live="polite">
+        <span class="total-label">当前总隐藏分</span>
+        <span class="total-score" id="totalScore">0</span>
+      </div>
+      <button class="reset-button" type="button" id="resetButton">清空记录</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="summary-strip">
+      <span class="summary-pill">普通总计 2630</span>
+      <span class="summary-pill">大师总计 3340</span>
+      <span class="empty-note">点击格子记录击杀，刷新后会自动保留。</span>
+    </div>
+    <section class="layout" id="tracker" aria-label="怪物隐藏分记录表"></section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "zelda-hidden-score-progress-v1";
+
+    const groups = [
+      {
+        name: "波克布林",
+        items: [
+          { name: "黑色波克布林", score: 3, max: 10 },
+          { name: "银色波克布林", score: 5, max: 10 },
+          { name: "金色波克布林", score: 5, max: 10, tone: "blue" }
+        ]
+      },
+      {
+        name: "莫利布林",
+        items: [
+          { name: "黑色莫利布林", score: 3.6, max: 10 },
+          { name: "银色莫利布林", score: 7, max: 10 },
+          { name: "金色莫利布林", score: 7, max: 10, tone: "blue" }
+        ]
+      },
+      {
+        name: "长袍法师",
+        items: [
+          { name: "火焰长袍法师", score: 1, max: 10 },
+          { name: "电击长袍法师", score: 1, max: 10 },
+          { name: "冰雪长袍法师", score: 1, max: 10 },
+          { name: "陨石长袍法师", score: 3, max: 10 },
+          { name: "冰冻长袍法师", score: 3, max: 10 },
+          { name: "雷电长袍法师", score: 3, max: 10 }
+        ]
+      },
+      {
+        name: "蜥蜴类",
+        items: [
+          { name: "黑色蜥蜴", score: 4, max: 10 },
+          { name: "喷水蜥蜴", score: 4, max: 10 },
+          { name: "吐雹蜥蜴", score: 4, max: 10 },
+          { name: "电麻蜥蜴", score: 4, max: 10 },
+          { name: "白银蜥蜴", score: 8, max: 10 },
+          { name: "黄金蜥蜴", score: 8, max: 10, tone: "blue" }
+        ]
+      },
+      {
+        name: "人马",
+        items: [
+          { name: "红发人马", score: 10, max: 10 },
+          { name: "蓝发人马", score: 12, max: 10 },
+          { name: "白发人马", score: 16, max: 10 },
+          { name: "白银人马", score: 24, max: 10 },
+          { name: "黄金人马", score: 24, max: 10, tone: "blue" }
+        ]
+      },
+      {
+        name: "守护者",
+        items: [
+          { name: "腐蚀", score: 2.4, max: 10 },
+          { name: "炮台", score: 7, max: 10 },
+          { name: "飞行", score: 10, max: 10 },
+          { name: "步行", score: 10, max: 10 },
+          { name: "普尔培拉", score: 3, max: 10 },
+          { name: "高阶", score: 4, max: 10 },
+          { name: "终阶", score: 7, max: 10 },
+          { name: "依盖队干部", score: 3, max: 10 },
+          { name: "可盖大人", score: 20, max: 1, tone: "purple" },
+          { name: "导师", score: 100, max: 1, tone: "blue", note: "DLC仅一次" }
+        ]
+      },
+      {
+        name: "西诺克斯",
+        items: [
+          { name: "红色", score: 3, max: 10 },
+          { name: "骷髅", score: 5, max: 10 },
+          { name: "蓝色", score: 5, max: 10 },
+          { name: "黑色", score: 7, max: 10 }
+        ]
+      },
+      {
+        name: "巨人",
+        items: [
+          { name: "岩石巨人", score: 3, max: 10 },
+          { name: "夜光巨人", score: 5, max: 10 },
+          { name: "稀有巨人", score: 6, max: 10 },
+          { name: "冰岩巨人", score: 7, max: 10 },
+          { name: "熔岩巨人", score: 7, max: 10 },
+          { name: "超级熔岩巨人", score: 7, max: 10, tone: "blue" },
+          { name: "莫尔德拉吉克", score: 10, max: 10 },
+          { name: "王拉吉克", score: 10, max: 10, tone: "blue" },
+          { name: "雷咒盖侬", score: 60, max: 1, tone: "purple" },
+          { name: "风咒盖侬", score: 60, max: 1, tone: "purple" },
+          { name: "水咒盖侬", score: 60, max: 1, tone: "purple" },
+          { name: "火咒盖侬", score: 60, max: 1, tone: "purple" },
+          { name: "盖侬本体", score: 160, max: 1, tone: "purple" }
+        ]
+      }
+    ];
+
+    const tracker = document.querySelector("#tracker");
+    const totalScore = document.querySelector("#totalScore");
+    const resetButton = document.querySelector("#resetButton");
+    let progress = loadProgress();
+
+    function loadProgress() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        return saved && typeof saved === "object" ? saved : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveProgress() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    }
+
+    function formatScore(value) {
+      const rounded = Math.round(value * 10) / 10;
+      return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    }
+
+    function itemId(groupName, itemName) {
+      return `${groupName}-${itemName}`;
+    }
+
+    function getCount(id, max) {
+      const count = Number(progress[id] || 0);
+      if (!Number.isFinite(count)) return 0;
+      return Math.min(Math.max(Math.trunc(count), 0), max);
+    }
+
+    function setCount(id, count) {
+      if (count <= 0) {
+        delete progress[id];
+      } else {
+        progress[id] = count;
+      }
+      saveProgress();
+      renderScores();
+    }
+
+    function render() {
+      tracker.innerHTML = "";
+
+      groups.forEach((group) => {
+        const section = document.createElement("article");
+        section.className = "category";
+
+        const header = document.createElement("header");
+        header.className = "category-header";
+        header.innerHTML = `
+          <span class="category-name">${group.name}</span>
+          <span>单只分数</span>
+          <span>击杀进度</span>
+          <span>本行得分</span>
+        `;
+        section.appendChild(header);
+
+        group.items.forEach((item) => {
+          const id = itemId(group.name, item.name);
+          const row = document.createElement("div");
+          row.className = "monster-row";
+          row.dataset.id = id;
+          row.dataset.score = item.score;
+          row.dataset.max = item.max;
+
+          const name = document.createElement("div");
+          name.className = `monster-name${item.tone ? ` tier-${item.tone}` : ""}`;
+          name.textContent = item.name;
+
+          const unit = document.createElement("div");
+          unit.className = "score-unit";
+          unit.textContent = formatScore(item.score);
+
+          const checks = document.createElement("div");
+          checks.className = `checks${item.max === 1 ? " one" : ""}`;
+          checks.setAttribute("role", "group");
+          checks.setAttribute("aria-label", `${item.name}击杀进度`);
+
+          for (let index = 1; index <= item.max; index += 1) {
+            const button = document.createElement("button");
+            button.className = "check";
+            button.type = "button";
+            button.dataset.index = index;
+            button.setAttribute("aria-label", `${item.name} 第 ${index} 次`);
+            button.addEventListener("click", () => {
+              const current = getCount(id, item.max);
+              const next = current === index ? index - 1 : index;
+              setCount(id, next);
+            });
+            checks.appendChild(button);
+          }
+
+          const rowScore = document.createElement("div");
+          rowScore.className = "row-score";
+          rowScore.dataset.role = "row-score";
+          rowScore.textContent = "0";
+
+          row.append(name, unit, checks, rowScore);
+          section.appendChild(row);
+        });
+
+        tracker.appendChild(section);
+      });
+
+      renderScores();
+    }
+
+    function renderScores() {
+      let total = 0;
+
+      document.querySelectorAll(".monster-row").forEach((row) => {
+        const id = row.dataset.id;
+        const score = Number(row.dataset.score);
+        const max = Number(row.dataset.max);
+        const count = getCount(id, max);
+        const rowTotal = score * count;
+        total += rowTotal;
+
+        row.querySelectorAll(".check").forEach((button) => {
+          const active = Number(button.dataset.index) <= count;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+
+        row.querySelector('[data-role="row-score"]').textContent = formatScore(rowTotal);
+      });
+
+      totalScore.textContent = formatScore(total);
+    }
+
+    resetButton.addEventListener("click", () => {
+      progress = {};
+      saveProgress();
+      renderScores();
+    });
+
+    render();
+  </script>
+</body>
+</html>
